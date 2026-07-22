@@ -1,6 +1,8 @@
 [Running] python -u "d:\胎壓檢測器自動抓取\autobild_win.py"
 Installing Chromium browser...
-Warning: Command '['C:\\Users\\OrangeUser1\\AppData\\Local\\Programs\\Python\\Python38\\python.exe', '-m', 'playwright', 'install', 'chromium']' returned non-zero exit status 4294967295.
+Warning: 
+Trying alternative installation...
+Installing system dependencies...
 
 ==================================================
   AutoBild Scraper v11.0 - Windows Version
@@ -8,29 +10,16 @@ Warning: Command '['C:\\Users\\OrangeUser1\\AppData\\Local\\Programs\\Python\\Py
   Timeout Protection: 5.5 hours
 ==================================================
 
-Traceback (most recent call last):
-  File "d:\�L���˴����۰ʧ��\autobild_win.py", line 796, in <module>
-    asyncio.run(scraper.run())
-  File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\site-packages\nest_asyncio.py", line 30, in run
-    return loop.run_until_complete(task)
-  File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\site-packages\nest_asyncio.py", line 98, in run_until_complete
-    return f.result()
-  File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\asyncio\futures.py", line 178, in result
-    raise self._exception
-  File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\site-packages\playwright\_impl\_connection.py", line 518, in wrap_api_call
-    return await cb()
-  File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\site-packages\playwright\_impl\_connection.py", line 97, in inner_send
-    result = next(iter(done)).result()
-  File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\asyncio\futures.py", line 178, in result
-    raise self._exception
-  File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\asyncio\tasks.py", line 280, in __step
-    result = coro.send(None)
-  File "d:\�L���˴����۰ʧ��\autobild_win.py", line 703, in run
-    async with async_playwright() as p:
-  File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\site-packages\playwright\async_api\_context_manager.py", line 46, in __aenter__
-    playwright = AsyncPlaywright(next(iter(done)).result())
-  File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\asyncio\futures.py", line 178, in result
-    raise self._exception
-Exception: Connection closed while reading from the driver
 
-[Done] exited with code=1 in 3.572 seconds
+[Error] Playwright failed to start: Connection closed while reading from the driver
+
+Please run these commands manually:
+  pip uninstall playwright -y
+  pip install playwright
+  python -m playwright install chromium
+  python -m playwright install-deps
+
+Then try running the script again.
+
+[Done] exited with code=1 in 3.368 seconds
+
