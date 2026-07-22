@@ -331,7 +331,7 @@ erDiagram
     car_catalog ||--o{ model_progress : "has progress"
 ```
 
-### 中文翻譯對照表
+### 中文翻譯對照表 
 
 #### 車型 (Category)
 
