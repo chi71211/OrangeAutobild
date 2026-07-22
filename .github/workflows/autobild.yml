@@ -1,0 +1,125 @@
+# ============================================================
+# GitHub Actions Workflow 配置檔案
+# 檔案名稱：.github/workflows/autobild.yml
+# 功能：自動排程執行 AutoBild 爬蟲
+# ============================================================
+
+# Workflow 名稱（顯示在 GitHub Actions 頁面）
+name: AutoBild Scraper
+
+# ============================================================
+# 觸發條件設定
+# 可以有多種觸發方式，會同時生效
+# ============================================================
+on:
+  # 1. 定時排程（cron 語法，使用 UTC 時間）
+  #    分 時 日 月 星期
+  #    0  2  *  *  0    → 每週日凌晨 2:00 (UTC)
+  #    0  2  *  *  1-5  → 週一到週五凌晨 2:00 (UTC)
+  #    0  */6 *  *  *   → 每 6 小時執行一次
+  schedule:
+    - cron: '0 2 * * 0'
+
+  # 2. 手動觸發（在 GitHub 網頁介面上按按鈕）
+  workflow_dispatch:
+    # 可以加入輸入參數（選擇性）
+    inputs:
+      target_brand:
+        description: '指定品牌（留空則爬全部）'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - VW
+          - BMW
+          - Mercedes
+          - Audi
+          - Porsche
+
+  # 3. 推送程式碼時觸發
+  push:
+    branches: [ main ]
+
+# ============================================================
+# 工作任務設定
+# ============================================================
+jobs:
+  # 任務名稱
+  scrape:
+    # 執行環境：ubuntu-latest (免費)
+    # 其他選項：ubuntu-22.04, windows-latest, macos-latest
+    runs-on: ubuntu-latest
+
+    # 超時限制（分鐘），防止執行太久
+    timeout-minutes: 360  # 6 小時
+
+    # ============================================================
+    # 步驟設定（依序執行）
+    # ============================================================
+    steps:
+    # 步驟 1：下載程式碼
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 步驟 2：設定 Python 環境
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    # 步驟 3：安裝所有依賴套件
+    - name: Install dependencies
+      run: |
+        # 升級 pip
+        python -m pip install --upgrade pip
+
+        # 安裝 requirements.txt 中的套件
+        pip install -r requirements.txt
+
+        # 安裝 Playwright 瀏覽器
+        playwright install chromium
+
+        # 安裝 Playwright 系統依賴
+        playwright install-deps
+
+    # 步驟 4：執行爬蟲
+    - name: Run scraper
+      run: |
+        # 如果有指定品牌參數，就只爬該品牌
+        if [ -n "${{ github.event.inputs.target_brand }}" ]; then
+          python autobild_github.py --brand ${{ github.event.inputs.target_brand }}
+        else
+          python autobild_github.py
+        fi
+      # 步驟超時設定（分鐘）
+      timeout-minutes: 330  # 5.5 小時
+
+    # 步驟 5：上傳 CSV 檔案（執行完成後保留 30 天）
+    - name: Upload CSV files
+      uses: actions/upload-artifact@v4
+      if: always()  # 即使失敗也上傳
+      with:
+        name: autobild-csv-${{ github.run_number }}
+        path: AutoBild_Exports/*.csv
+        retention-days: 30
+
+    # 步驟 6：上傳資料庫檔案
+    - name: Upload database
+      uses: actions/upload-artifact@v4
+      if: always()  # 即使失敗也上傳
+      with:
+        name: autobild-db-${{ github.run_number }}
+        path: autobild_master.db
+        retention-days: 30
+
+    # 步驟 7：上傳進度表（方便下次中斷後繼續）
+    - name: Upload progress
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: autobild-progress-${{ github.run_number }}
+        path: |
+          autobild_master.db
+          AutoBild_Exports/
+        retention-days: 30
