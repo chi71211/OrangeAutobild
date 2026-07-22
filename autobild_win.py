@@ -22,10 +22,12 @@ def install_packages():
             subprocess.check_call([sys.executable, '-m', 'pip', 'install', pkg, '-q'])
     try:
         import playwright
-        subprocess.check_call([sys.executable, '-m', 'playwright', 'install', 'chromium'], 
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception:
-        pass
+        print("Installing Chromium browser...")
+        subprocess.check_call([sys.executable, '-m', 'playwright', 'install', 'chromium'])
+        print("Installing system dependencies...")
+        subprocess.check_call([sys.executable, '-m', 'playwright', 'install-deps'])
+    except Exception as e:
+        print(f"Warning: {e}")
 
 install_packages()
 
