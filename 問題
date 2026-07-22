@@ -1,4 +1,6 @@
-Running] python -u "d:\胎壓檢測器自動抓取\autobild_win.py"
+[Running] python -u "d:\胎壓檢測器自動抓取\autobild_win.py"
+Installing Chromium browser...
+Warning: Command '['C:\\Users\\OrangeUser1\\AppData\\Local\\Programs\\Python\\Python38\\python.exe', '-m', 'playwright', 'install', 'chromium']' returned non-zero exit status 4294967295.
 
 ==================================================
   AutoBild Scraper v11.0 - Windows Version
@@ -7,7 +9,7 @@ Running] python -u "d:\胎壓檢測器自動抓取\autobild_win.py"
 ==================================================
 
 Traceback (most recent call last):
-  File "d:\�L���˴����۰ʧ��\autobild_win.py", line 794, in <module>
+  File "d:\�L���˴����۰ʧ��\autobild_win.py", line 796, in <module>
     asyncio.run(scraper.run())
   File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\site-packages\nest_asyncio.py", line 30, in run
     return loop.run_until_complete(task)
@@ -23,7 +25,7 @@ Traceback (most recent call last):
     raise self._exception
   File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\asyncio\tasks.py", line 280, in __step
     result = coro.send(None)
-  File "d:\�L���˴����۰ʧ��\autobild_win.py", line 701, in run
+  File "d:\�L���˴����۰ʧ��\autobild_win.py", line 703, in run
     async with async_playwright() as p:
   File "C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\lib\site-packages\playwright\async_api\_context_manager.py", line 46, in __aenter__
     playwright = AsyncPlaywright(next(iter(done)).result())
@@ -31,5 +33,5 @@ Traceback (most recent call last):
     raise self._exception
 Exception: Connection closed while reading from the driver
 
-[Done] exited with code=1 in 2.714 seconds
+[Done] exited with code=1 in 2.253 seconds
 
