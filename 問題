@@ -33,5 +33,4 @@ Traceback (most recent call last):
     raise self._exception
 Exception: Connection closed while reading from the driver
 
-[Done] exited with code=1 in 2.253 seconds
-
+[Done] exited with code=1 in 3.572 seconds
