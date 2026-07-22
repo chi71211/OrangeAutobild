@@ -1,25 +1,29 @@
-[Running] python -u "d:\胎壓檢測器自動抓取\autobild_win.py"
-
-==================================================
-  AutoBild Scraper v11.0 - Windows Version
-  Mode: Full
-  Timeout Protection: 5.5 hours
-==================================================
-
-
-[Error] Playwright failed to start: Connection closed while reading from the driver
-
-This is a Windows/Python compatibility issue.
-Please try these solutions:
-
-Solution 1 - Reinstall Playwright:
-  pip uninstall playwright -y
-  pip install playwright==1.40.0
-  python -m playwright install chromium
-
-Solution 2 - Use newer Python:
-  Download Python 3.10+ from python.org
-
-Solution 3 - Run on Mac/Linux instead
-
-[Done] exited with code=1 in 2.129 seconds
+PS C:\Users\OrangeUser1> pip uninstall playwright -y
+Found existing installation: playwright 1.48.0
+Uninstalling playwright-1.48.0:
+  Successfully uninstalled playwright-1.48.0
+PS C:\Users\OrangeUser1> pip install playwright==1.40.0
+Collecting playwright==1.40.0
+  Downloading playwright-1.40.0-py3-none-win_amd64.whl.metadata (3.6 kB)
+Collecting greenlet==3.0.1 (from playwright==1.40.0)
+  Downloading greenlet-3.0.1-cp38-cp38-win_amd64.whl.metadata (3.8 kB)
+Collecting pyee==11.0.1 (from playwright==1.40.0)
+  Downloading pyee-11.0.1-py3-none-any.whl.metadata (2.7 kB)
+Requirement already satisfied: typing-extensions in c:\users\orangeuser1\appdata\local\programs\python\python38\lib\site-packages (from playwright==1.40.0) (4.13.2)
+Downloading playwright-1.40.0-py3-none-win_amd64.whl (29.3 MB)
+   ---------------------------------------- 29.3/29.3 MB 17.6 MB/s eta 0:00:00
+Downloading greenlet-3.0.1-cp38-cp38-win_amd64.whl (287 kB)
+Downloading pyee-11.0.1-py3-none-any.whl (15 kB)
+Installing collected packages: pyee, greenlet, playwright
+  Attempting uninstall: pyee
+    Found existing installation: pyee 12.0.0
+    Uninstalling pyee-12.0.0:
+      Successfully uninstalled pyee-12.0.0
+  Attempting uninstall: greenlet
+    Found existing installation: greenlet 3.1.1
+    Uninstalling greenlet-3.1.1:
+      Successfully uninstalled greenlet-3.1.1
+Successfully installed greenlet-3.0.1 playwright-1.40.0 pyee-11.0.1
+PS C:\Users\OrangeUser1> python -m playeright install chromium
+C:\Users\OrangeUser1\AppData\Local\Programs\Python\Python38\python.exe: No module named playeright
+PS C:\Users\OrangeUser1>
