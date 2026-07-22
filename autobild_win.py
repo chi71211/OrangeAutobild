@@ -20,14 +20,26 @@ def install_packages():
         except ImportError:
             print(f"Installing {pkg}...")
             subprocess.check_call([sys.executable, '-m', 'pip', 'install', pkg, '-q'])
+    
+    # 安裝 Playwright 和 Chromium
     try:
         import playwright
         print("Installing Chromium browser...")
-        subprocess.check_call([sys.executable, '-m', 'playwright', 'install', 'chromium'])
-        print("Installing system dependencies...")
-        subprocess.check_call([sys.executable, '-m', 'playwright', 'install-deps'])
+        result = subprocess.run([sys.executable, '-m', 'playwright', 'install', 'chromium'], 
+                              capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Warning: {result.stderr}")
+            print("Trying alternative installation...")
+            subprocess.run([sys.executable, '-m', 'playwright', 'install'], check=False)
     except Exception as e:
         print(f"Warning: {e}")
+    
+    # 安裝系統依賴
+    try:
+        print("Installing system dependencies...")
+        subprocess.run([sys.executable, '-m', 'playwright', 'install-deps'], check=False)
+    except Exception:
+        pass
 
 install_packages()
 
@@ -700,14 +712,15 @@ class AutoBildScraper:
         print(f"  Timeout Protection: {Config.MAX_RUNTIME_HOURS} hours")
         print("=" * 50 + "\n")
 
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                viewport={'width': 1440, 'height': 900}
-            )
-            context.on("response", self.handle_api_response)
-            page = await context.new_page()
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                context = await browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                    viewport={'width': 1440, 'height': 900}
+                )
+                context.on("response", self.handle_api_response)
+                page = await context.new_page()
 
             try:
                 brand_urls = await self.collect_brand_urls(page)
@@ -738,6 +751,16 @@ class AutoBildScraper:
             finally:
                 self.db.flush()
                 await browser.close()
+
+        except Exception as e:
+            print(f"\n[Error] Playwright failed to start: {e}")
+            print("\nPlease run these commands manually:")
+            print("  pip uninstall playwright -y")
+            print("  pip install playwright")
+            print("  python -m playwright install chromium")
+            print("  python -m playwright install-deps")
+            print("\nThen try running the script again.")
+            sys.exit(1)
 
         self.db.close()
 
