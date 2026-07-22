@@ -176,142 +176,159 @@ on:
 
 ---
 
-## 系統流程圖
+AutoBild 爬蟲系統 v11.0 流程圖
+================================
 
-![流程圖](flowchart.png)
+【完整流程圖】
 
-### 詳細流程說明
-
+```mermaid
+flowchart TD
+    Start([啟動爬蟲]) --> InstallPkg[安裝套件]
+    
+    InstallPkg --> CheckCmd{檢查參數}
+    CheckCmd -- reset --> ResetDB[(重置資料庫)] --> End
+    CheckCmd -- status --> ShowStatus[(顯示統計)] --> End
+    CheckCmd -- test --> SetTestMode[測試模式]
+    CheckCmd -- brand --> SetBrand[品牌模式]
+    CheckCmd -- 無參數 --> SetFullMode[完整掃描]
+    
+    SetTestMode --> InitDB
+    SetBrand --> InitDB
+    SetFullMode --> InitDB
+    
+    InitDB[(初始化資料庫)]
+    
+    InitDB --> CheckProgress{檢查進度}
+    CheckProgress -- 有記錄 --> ResumeMode[繼續模式]
+    CheckProgress -- 無記錄 --> FullMode[全面模式]
+    
+    ResumeMode --> LaunchBrowser
+    FullMode --> LaunchBrowser
+    
+    LaunchBrowser[啟動瀏覽器]
+    
+    LaunchBrowser --> CollectBrands[收集品牌]
+    
+    CollectBrands --> BrandLoop[品牌迴圈]
+    
+    BrandLoop --> CheckTimeout1{超時檢查}
+    CheckTimeout1 -- 是 --> Timeout([安全暫停])
+    CheckTimeout1 -- 否 --> EnterBrand[進入品牌]
+    
+    EnterBrand --> CollectModels[收集車系]
+    
+    CollectModels --> ModelLoop[車系迴圈]
+    
+    ModelLoop --> CheckTimeout2{超時檢查}
+    CheckTimeout2 -- 是 --> Timeout
+    CheckTimeout2 -- 否 --> CheckProgress2{檢查跳過}
+    
+    CheckProgress2 -- 跳過 --> SkipModel[略過] --> ModelLoop
+    CheckProgress2 -- 繼續 --> GotoModel[前往車系]
+    
+    GotoModel --> ScrollPage[滾動載入]
+    
+    ScrollPage --> CheckVariants{檢查變體}
+    
+    CheckVariants -- 無變體 --> ExtractSingle[擷取單一]
+    
+    CheckVariants -- 有變體 --> ExpandAll[展開全部]
+    
+    ExpandAll --> ExtractData[擷取資料]
+    ExtractSingle --> BuildRecords
+    
+    ExtractData --> BuildRecords[建構記錄]
+    
+    BuildRecords --> TranslateData[翻譯中文化]
+    
+    TranslateData --> LoopRecords[遍歷變體]
+    
+    LoopRecords --> CheckTimeout3{超時檢查}
+    CheckTimeout3 -- 是 --> Timeout
+    CheckTimeout3 -- 否 --> TryHSN{擷取HSN/TSN}
+    
+    TryHSN -- 是 --> ClickVariant[點擊變體]
+    ClickVariant --> WaitAPI[等待回應]
+    WaitAPI --> CheckAPI{檢查API}
+    CheckAPI -- 有 --> SetHSN[設定HSN/TSN]
+    CheckAPI -- 無 --> CheckDOM{檢查DOM}
+    CheckDOM -- 有 --> SetHSN
+    CheckDOM -- 無 --> CloseOverlay[關閉彈窗]
+    
+    SetHSN --> AddBatch[加入暫存]
+    CloseOverlay --> AddBatch
+    TryHSN -- 否 --> AddBatch
+    
+    AddBatch --> CheckBatch{批次檢查}
+    CheckBatch -- 超過50筆 --> SaveDB[(寫入資料庫)]
+    SaveDB --> ClearBatch[清空暫存] --> LoopRecords
+    CheckBatch -- 未滿 --> LoopRecords
+    
+    LoopRecords -- 完成 --> FlushBatch[(強制寫入)]
+    FlushBatch --> UpdateProgress[(更新進度)]
+    
+    UpdateProgress --> ModelLoop
+    
+    ModelLoop -- 完成 --> ExportCSV[(匯出CSV)]
+    ExportCSV --> BrandLoop
+    
+    BrandLoop -- 完成 --> CloseBrowser[關閉瀏覽器]
+    
+    CloseBrowser --> Finalize[完成]
+    
+    Finalize --> End([結束])
+    Timeout --> SaveTemp[(儲存暫存)] --> End
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         開始執行                                 │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    自動安裝所需套件                               │
-│  - nest_asyncio                                                 │
-│  - playwright (含 chromium)                                     │
-│  - pandas                                                       │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    初始化資料庫                                   │
-│  - car_catalog (車輛資料表)                                      │
-│  - model_progress (進度追蹤表)                                    │
-│  - view_car_catalog (檢視表)                                     │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    啟動瀏覽器                                     │
-│  - Chromium headless 模式                                       │
-│  - 設定 User-Agent                                              │
-│  - 設定 API 攔截器                                               │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              步驟 1: 收集所有品牌 URL                              │
-│  - 前往 /marken-modelle/                                        │
-│  - 滾動載入所有品牌                                              │
-│  - 提取所有品牌連結                                              │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              步驟 2: 遍歷每個品牌                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ for each brand:                                         │   │
-│  │   - 點擊「ALLE MODELLE」顯示所有車系                      │   │
-│  │   - 收集該品牌所有車系 URL                                 │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              步驟 3: 遍歷每個車系                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ for each model:                                         │   │
-│  │   1. 檢查進度表 (7天內已爬取 → 跳過)                       │   │
-│  │   2. 前往車系頁面                                         │   │
-│  │   3. 滾動載入所有內容                                     │   │
-│  │   4. 點擊「顯示更多」展開所有變體                          │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              步驟 4: 擷取頁面資料                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ extract_page_data():                                    │   │
-│  │   - 標題 (vv__header-text-title)                        │   │
-│  │   - 副標題 (vv__header-text-subtitle)                   │   │
-│  │   - 燃料類型標籤 (fuelTypeBadge)                         │   │
-│  │   - 所有變體資料 (vv__fuelType-dataBodyLine)             │   │
-│  │   - 技術規格表 (editorialTable)                          │   │
-│  │   - JSON 資料 (#vike_pageContext)                        │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              步驟 5: 建構記錄                                    │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ build_records():                                        │   │
-│  │   - 翻譯車型 (Category) → 中文                           │   │
-│  │   - 翻譯燃料類型 (Fuel_Type) → 中文                       │   │
-│  │   - 拆分年份 → Start_Year, End_Year                      │   │
-│  │   - 設定 HSN_TSN = N/A (後續嘗試擷取)                    │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              步驟 6: 嘗試擷取 HSN/TSN                            │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ for each variant (最多 10 個):                           │   │
-│  │   1. 點擊變體連結                                        │   │
-│  │   2. 等待 API 回應                                       │   │
-│  │   3. 從 API 或 DOM 擷取 HSN/TSN                          │   │
-│  │   4. 關閉彈窗                                            │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              步驟 7: 儲存資料                                    │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ - 批次寫入資料庫 (每 50 筆)                               │   │
-│  │ - 更新進度表 (model_progress)                            │   │
-│  │ - 匯出品牌 CSV                                           │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              步驟 8: 檢查超時                                    │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ if elapsed > 5.5 hours:                                 │   │
-│  │   - 安全暫停                                             │   │
-│  │   - 儲存已爬取資料                                        │   │
-│  │   - 匯出 CSV                                             │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    完成所有品牌                                   │
-│  - 關閉瀏覽器                                                   │
-│  - 關閉資料庫連線                                                │
-│  - 顯示統計資訊                                                  │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                         結束                                     │
-└─────────────────────────────────────────────────────────────────┘
+
+---
+
+【簡化版流程圖】
+
+```mermaid
+flowchart LR
+    A[啟動] --> B[安裝套件]
+    B --> C[初始化DB]
+    C --> D[檢查進度]
+    D --> E[收集品牌]
+    E --> F[收集車系]
+    F --> G[超時檢查]
+    G --> H[擷取資料]
+    H --> I[翻譯中文化]
+    I --> J[HSN/TSN]
+    J --> K[寫入DB]
+    K --> L{更多車系?}
+    L -- 是 --> G
+    L -- 否 --> M[匯出CSV]
+    M --> N{更多品牌?}
+    N -- 是 --> E
+    N -- 否 --> O[結束]
+```
+
+---
+
+【資料庫 Schema】
+
+```mermaid
+erDiagram
+    car_catalog {
+        TEXT Brand
+        TEXT Model
+        TEXT Category
+        TEXT Fuel_Type
+        TEXT Typ
+        TEXT Start_Year
+        TEXT End_Year
+        TEXT HSN_TSN
+    }
+    
+    model_progress {
+        TEXT Brand
+        TEXT Model
+        INTEGER variant_count
+        TEXT last_scraped
+    }
+    
+    car_catalog ||--o{ model_progress : "has progress"
 ```
 
 ### 中文翻譯對照表
