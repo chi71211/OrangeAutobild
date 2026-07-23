@@ -1,7 +1,13 @@
 """
-AutoBild 爬蟲系統 v11.0 - GitHub/Cloud 版本
+AutoBild 爬蟲系統 v11.0 - GitHub/Cloud 終極自動儲存版
 =============================================
 適用於 GitHub Actions、Google Colab、Jupyter Notebook 等環境
+
+核心升級：
+1. 訊號攔截 (Signal Handling)：完美支援 GitHub Actions 的 Cancel 動作，安全存檔不漏抓。
+2. 混合解析架構：精準定位 vv__ / vvp__ 區塊，並直接解析 #vike_pageContext 取得底層 JSON。
+3. API 攔截器：從動態載入的 API 回應中提取 HSN/TSN。
+4. 斷點續傳進度表：支援增量更新，重開自動跳過已完成車系。
 
 用法：
   python autobild_github.py              # 完整掃描
@@ -14,6 +20,7 @@ AutoBild 爬蟲系統 v11.0 - GitHub/Cloud 版本
 import subprocess
 import sys
 import os
+import signal # 🌟 新增：系統訊號攔截
 
 def install_packages():
     packages = ['nest_asyncio', 'playwright', 'pandas']
@@ -26,7 +33,7 @@ def install_packages():
     try:
         import playwright
         subprocess.check_call([sys.executable, '-m', 'playwright', 'install', 'chromium'], 
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
 
@@ -200,17 +207,9 @@ async def dismiss_cookie(page):
         pass
 
 
-def clean_text(text):
+def extract_date_range(text):
     if not text:
         return "N/A"
-    t = re.sub(r'\s+', ' ', text).strip()
-    t = t.rstrip(':').strip()
-    if not t or t == '-' or t.lower() == 'n/a':
-        return "N/A"
-    return t
-
-
-def extract_date_range(text):
     match = re.search(r'(\d{2}/\d{4})\s*[–-]\s*(\d{2}/\d{4})', text)
     if match:
         return f"{match.group(1)} - {match.group(2)}"
@@ -228,10 +227,32 @@ class AutoBildScraper:
         self.start_time = time.time()
         self.api_hsn_tsn = None
         self.api_captured = False
+        
+        # 🌟 新增：中斷標記與攔截器
+        self.is_interrupted = False
+        self._setup_signal_handlers()
 
-    def is_timeout(self):
+    def _setup_signal_handlers(self):
+        """🌟 註冊系統訊號攔截，防止 GitHub Cancel 導致資料遺失"""
+        def signal_handler(signum, frame):
+            print(f"\n[Warning] 收到系統中斷訊號 (Signal {signum})，正在安全刷新資料庫並準備退出...")
+            self.is_interrupted = True
+            
+        try:
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
+        except Exception:
+            pass 
+
+    def should_stop(self):
+        """🌟 統一判斷是否應該終止爬蟲 (手動中斷或超時)"""
+        if self.is_interrupted:
+            return True
         elapsed = (time.time() - self.start_time) / 3600
-        return elapsed >= Config.MAX_RUNTIME_HOURS
+        if elapsed >= Config.MAX_RUNTIME_HOURS:
+            print(f"\n[Timeout] 觸發超時保護 (>{Config.MAX_RUNTIME_HOURS} hours), 準備安全停止...")
+            return True
+        return False
 
     async def handle_api_response(self, response):
         try:
@@ -573,12 +594,6 @@ class AutoBildScraper:
             'wasserstoff': '氫燃料'
         }
 
-        tech_rows = {}
-        if page_data.get('editorialTable'):
-            for row in page_data['editorialTable']['rows']:
-                label = row['label'].lower()
-                tech_rows[label] = row
-
         for v in page_data.get('variants', []):
             fuel = v.get('fuelType', 'N/A')
             if fuel_type_filter and fuel != fuel_type_filter:
@@ -618,8 +633,8 @@ class AutoBildScraper:
         model_name = model_url.strip('/').split('/')[-1].replace('-', ' ').title()
         base_brand = brand
 
-        if self.is_timeout():
-            print(f"\n[Timeout] Protection triggered (>{Config.MAX_RUNTIME_HOURS} hours), stopping...")
+        # 🌟 使用 should_stop() 判斷
+        if self.should_stop():
             return False
 
         await page.goto(model_url, timeout=60000, wait_until="domcontentloaded")
@@ -668,8 +683,8 @@ class AutoBildScraper:
             records = records[:6]
 
         for i, record in enumerate(records):
-            if self.is_timeout():
-                print(f"\n[Timeout] Stopping extraction...")
+            # 🌟 使用 should_stop() 判斷
+            if self.should_stop():
                 break
 
             sys.stdout.write(
@@ -710,16 +725,18 @@ class AutoBildScraper:
 
             try:
                 brand_urls = await self.collect_brand_urls(page)
-
                 total_brands = len(brand_urls)
+                
                 for b_idx, b_url in enumerate(brand_urls):
-                    if self.is_timeout():
+                    # 🌟 使用 should_stop() 判斷
+                    if self.should_stop():
                         break
 
                     brand_name, model_urls = await self.collect_model_urls(page, b_url)
 
                     for m_idx, m_url in enumerate(model_urls):
-                        if self.is_timeout():
+                        # 🌟 使用 should_stop() 判斷
+                        if self.should_stop():
                             break
 
                         try:
