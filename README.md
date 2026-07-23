@@ -196,22 +196,22 @@ flowchart TD
     SetBrand --> InitDB
     SetFullMode --> InitDB
     
-    InitDB[(初始化資料庫)] --> CheckGlobal{檢查全域狀態\n(system_metadata)}
+    InitDB[(初始化資料庫)] --> CheckGlobal{"檢查全域狀態<br>(system_metadata)"}
     
-    CheckGlobal -- "已標記 completed\n或超過 7 天" --> ClearProgress[\清空舊進度/] --> LaunchBrowser
+    CheckGlobal -- "已標記 completed<br>或超過 7 天" --> ClearProgress[\清空舊進度/] --> LaunchBrowser
     CheckGlobal -- "7 天內未完成" --> ResumeMode[\讀取斷點接續掃描/] --> LaunchBrowser
     
     LaunchBrowser[啟動瀏覽器] --> CollectBrands[收集品牌]
     CollectBrands --> BrandLoop[品牌迴圈]
     
-    BrandLoop --> CheckInterrupt1{中斷/超時檢查}
+    BrandLoop --> CheckInterrupt1{"中斷/超時檢查"}
     CheckInterrupt1 -- "Ctrl+C 或超時" --> SafeStop([安全寫入並暫停])
     CheckInterrupt1 -- 否 --> EnterBrand[進入品牌]
     
     EnterBrand --> CollectModels[收集車系]
     CollectModels --> ModelLoop[車系迴圈]
     
-    ModelLoop --> CheckInterrupt2{中斷/超時檢查}
+    ModelLoop --> CheckInterrupt2{"中斷/超時檢查"}
     CheckInterrupt2 -- "Ctrl+C 或超時" --> SafeStop
     CheckInterrupt2 -- 否 --> CheckProgress2{檢查進度表}
     
@@ -228,13 +228,13 @@ flowchart TD
     
     BuildRecords --> TranslateData[翻譯中文化] --> LoopRecords[遍歷變體寫入]
     
-    LoopRecords --> CheckInterrupt3{中斷/超時檢查}
+    LoopRecords --> CheckInterrupt3{"中斷/超時檢查"}
     CheckInterrupt3 -- "Ctrl+C 或超時" --> SafeStop
-    CheckInterrupt3 -- 否 --> TryHSN{API 或 DOM\n擷取 HSN/TSN}
+    CheckInterrupt3 -- 否 --> TryHSN{"API 或 DOM<br>擷取 HSN/TSN"}
     
     TryHSN --> SetHSN[設定 HSN/TSN] --> AddBatch[加入暫存 Batch]
     
-    AddBatch --> CheckBatch{批次滿 50 筆?}
+    AddBatch --> CheckBatch{"批次滿 50 筆?"}
     CheckBatch -- 是 --> SaveDB[(寫入資料庫)] --> LoopRecords
     CheckBatch -- 否 --> LoopRecords
     
