@@ -184,9 +184,9 @@ AutoBild 爬蟲系統 v11.0 流程圖
 ```mermaid
 flowchart TD
     Start([啟動爬蟲]) --> InstallPkg[安裝套件]
-    
     InstallPkg --> CheckCmd{檢查參數}
-    CheckCmd -- reset --> ResetDB[(重置資料庫)] --> End
+    
+    CheckCmd -- reset --> ResetDB[(強制重置資料庫)] --> End
     CheckCmd -- status --> ShowStatus[(顯示統計)] --> End
     CheckCmd -- test --> SetTestMode[測試模式]
     CheckCmd -- brand --> SetBrand[品牌模式]
@@ -196,88 +196,57 @@ flowchart TD
     SetBrand --> InitDB
     SetFullMode --> InitDB
     
-    InitDB[(初始化資料庫)]
+    InitDB[(初始化資料庫)] --> CheckGlobal{檢查全域狀態\n(system_metadata)}
     
-    InitDB --> CheckProgress{檢查進度}
-    CheckProgress -- 有記錄 --> ResumeMode[繼續模式]
-    CheckProgress -- 無記錄 --> FullMode[全面模式]
+    CheckGlobal -- "已標記 completed\n或超過 7 天" --> ClearProgress[\清空舊進度/] --> LaunchBrowser
+    CheckGlobal -- "7 天內未完成" --> ResumeMode[\讀取斷點接續掃描/] --> LaunchBrowser
     
-    ResumeMode --> LaunchBrowser
-    FullMode --> LaunchBrowser
-    
-    LaunchBrowser[啟動瀏覽器]
-    
-    LaunchBrowser --> CollectBrands[收集品牌]
-    
+    LaunchBrowser[啟動瀏覽器] --> CollectBrands[收集品牌]
     CollectBrands --> BrandLoop[品牌迴圈]
     
-    BrandLoop --> CheckTimeout1{超時檢查}
-    CheckTimeout1 -- 是 --> Timeout([安全暫停])
-    CheckTimeout1 -- 否 --> EnterBrand[進入品牌]
+    BrandLoop --> CheckInterrupt1{中斷/超時檢查}
+    CheckInterrupt1 -- "Ctrl+C 或超時" --> SafeStop([安全寫入並暫停])
+    CheckInterrupt1 -- 否 --> EnterBrand[進入品牌]
     
     EnterBrand --> CollectModels[收集車系]
-    
     CollectModels --> ModelLoop[車系迴圈]
     
-    ModelLoop --> CheckTimeout2{超時檢查}
-    CheckTimeout2 -- 是 --> Timeout
-    CheckTimeout2 -- 否 --> CheckProgress2{檢查跳過}
+    ModelLoop --> CheckInterrupt2{中斷/超時檢查}
+    CheckInterrupt2 -- "Ctrl+C 或超時" --> SafeStop
+    CheckInterrupt2 -- 否 --> CheckProgress2{檢查進度表}
     
-    CheckProgress2 -- 跳過 --> SkipModel[略過] --> ModelLoop
-    CheckProgress2 -- 繼續 --> GotoModel[前往車系]
+    CheckProgress2 -- "已爬取完成" --> SkipModel[略過車系] --> ModelLoop
+    CheckProgress2 -- "未爬取/未完" --> GotoModel[前往車系詳細頁]
     
-    GotoModel --> ScrollPage[滾動載入]
+    GotoModel --> ScrollPage[滾動載入] --> CheckVariants{檢查變體數量}
     
-    ScrollPage --> CheckVariants{檢查變體}
+    CheckVariants -- 無變體 --> ExtractSingle[擷取單一規格]
+    CheckVariants -- 有變體 --> ExpandAll[點擊展開全部變體] --> ExtractData[擷取多規格資料]
     
-    CheckVariants -- 無變體 --> ExtractSingle[擷取單一]
-    
-    CheckVariants -- 有變體 --> ExpandAll[展開全部]
-    
-    ExpandAll --> ExtractData[擷取資料]
     ExtractSingle --> BuildRecords
-    
     ExtractData --> BuildRecords[建構記錄]
     
-    BuildRecords --> TranslateData[翻譯中文化]
+    BuildRecords --> TranslateData[翻譯中文化] --> LoopRecords[遍歷變體寫入]
     
-    TranslateData --> LoopRecords[遍歷變體]
+    LoopRecords --> CheckInterrupt3{中斷/超時檢查}
+    CheckInterrupt3 -- "Ctrl+C 或超時" --> SafeStop
+    CheckInterrupt3 -- 否 --> TryHSN{API 或 DOM\n擷取 HSN/TSN}
     
-    LoopRecords --> CheckTimeout3{超時檢查}
-    CheckTimeout3 -- 是 --> Timeout
-    CheckTimeout3 -- 否 --> TryHSN{擷取HSN/TSN}
+    TryHSN --> SetHSN[設定 HSN/TSN] --> AddBatch[加入暫存 Batch]
     
-    TryHSN -- 是 --> ClickVariant[點擊變體]
-    ClickVariant --> WaitAPI[等待回應]
-    WaitAPI --> CheckAPI{檢查API}
-    CheckAPI -- 有 --> SetHSN[設定HSN/TSN]
-    CheckAPI -- 無 --> CheckDOM{檢查DOM}
-    CheckDOM -- 有 --> SetHSN
-    CheckDOM -- 無 --> CloseOverlay[關閉彈窗]
+    AddBatch --> CheckBatch{批次滿 50 筆?}
+    CheckBatch -- 是 --> SaveDB[(寫入資料庫)] --> LoopRecords
+    CheckBatch -- 否 --> LoopRecords
     
-    SetHSN --> AddBatch[加入暫存]
-    CloseOverlay --> AddBatch
-    TryHSN -- 否 --> AddBatch
-    
-    AddBatch --> CheckBatch{批次檢查}
-    CheckBatch -- 超過50筆 --> SaveDB[(寫入資料庫)]
-    SaveDB --> ClearBatch[清空暫存] --> LoopRecords
-    CheckBatch -- 未滿 --> LoopRecords
-    
-    LoopRecords -- 完成 --> FlushBatch[(強制寫入)]
-    FlushBatch --> UpdateProgress[(更新進度)]
-    
+    LoopRecords -- 該車系完成 --> FlushBatch[(強制寫入)] --> UpdateProgress[(更新進度表)]
     UpdateProgress --> ModelLoop
     
-    ModelLoop -- 完成 --> ExportCSV[(匯出CSV)]
-    ExportCSV --> BrandLoop
+    ModelLoop -- 該品牌完成 --> ExportCSV[(匯出 CSV)] --> BrandLoop
     
-    BrandLoop -- 完成 --> CloseBrowser[關閉瀏覽器]
+    BrandLoop -- 全站掃描完成 --> MarkCompleted[(標記狀態為 completed)] --> CloseBrowser[關閉瀏覽器]
+    SafeStop --> CloseBrowser
     
-    CloseBrowser --> Finalize[完成]
-    
-    Finalize --> End([結束])
-    Timeout --> SaveTemp[(儲存暫存)] --> End
+    CloseBrowser --> End([結束])
 ```
 
 ---
@@ -286,23 +255,23 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    A[啟動] --> B[安裝套件]
-    B --> C[初始化DB]
-    C --> D[檢查進度]
-    D --> E[收集品牌]
-    E --> F[收集車系]
-    F --> G[超時檢查]
-    G --> H[擷取資料]
-    H --> I[翻譯中文化]
-    I --> J[HSN/TSN]
-    J --> K[寫入DB]
+    A[啟動] --> B[安裝套件/初始化 DB]
+    B --> C{7日/完工檢查}
+    C -- 重置 --> D[清空進度]
+    C -- 接續 --> E[讀取斷點]
+    D --> F[收集品牌與車系]
+    E --> F
+    F --> G{中斷/超時?}
+    G -- 是 --> H[安全存檔退出]
+    G -- 否 --> I[擷取與翻譯]
+    I --> J[匹配 HSN/TSN]
+    J --> K[(寫入 DB 與更新進度)]
     K --> L{更多車系?}
     L -- 是 --> G
-    L -- 否 --> M[匯出CSV]
+    L -- 否 --> M[匯出 CSV]
     M --> N{更多品牌?}
-    N -- 是 --> E
-    N -- 否 --> O[結束]
-```
+    N -- 是 --> F
+    N -- 否 --> O[(標記完工)] --> P[完美結束]
 
 ---
 
