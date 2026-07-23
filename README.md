@@ -30,11 +30,11 @@
 ### 本地執行（Mac/Linux）
 
 ```bash
-python autobild_v11.py              # 完整掃描
-python autobild_v11.py --test       # 測試模式
-python autobild_v11.py --brand VW   # 只抓特定品牌
-python autobild_v11.py --status     # 查看統計
-python autobild_v11.py --reset      # 重置資料庫
+python autobild_v11.py              # 完整掃描
+python autobild_v11.py --test       # 測試模式
+python autobild_v11.py --brand VW   # 只抓特定品牌
+python autobild_v11.py --status     # 查看統計
+python autobild_v11.py --reset      # 重置資料庫
 ```
 
 ### Windows
@@ -78,7 +78,7 @@ git push -u origin main
 **步驟 4：設定 Actions 權限**
 1. 到 **Settings** → **Actions** → **General**
 2. 在 **Workflow permissions** 選擇：
-   - **Read and write permissions**
+   - **Read and write permissions**
 3. 點選 **Save**
 
 **步驟 5：手動觸發測試**
@@ -100,11 +100,11 @@ git push -u origin main
 
 ```yaml
 on:
-  schedule:
-    - cron: '0 2 * * 0'  # 每週日凌晨 2 點 (UTC)
-  workflow_dispatch:      # 允許手動觸發
-  push:
-    branches: [ main ]    # 推送到 main 分支時觸發
+  schedule:
+    - cron: '0 2 * * 0'  # 每週日凌晨 2 點 (UTC)
+  workflow_dispatch:      # 允許手動觸發
+  push:
+    branches: [ main ]    # 推送到 main 分支時觸發
 ```
 
 | 觸發方式 | 說明 |
@@ -135,8 +135,8 @@ on:
 1. 進入 **Actions** → 點選該次執行
 2. 滾動到底部 **Artifacts** 區域
 3. 下載：
-   - `autobild-csv-{run_number}` - 所有品牌 CSV
-   - `autobild-db-{run_number}` - 資料庫檔案
+   - `autobild-csv-{run_number}` - 所有品牌 CSV
+   - `autobild-db-{run_number}` - 資料庫檔案
 
 ### Google Colab
 
@@ -158,9 +158,9 @@ on:
 
 - Python 3.8+
 - 所有套件會自動安裝：
-  - playwright
-  - pandas
-  - nest_asyncio
+  - playwright
+  - pandas
+  - nest_asyncio
 
 ## 輸出
 
@@ -272,6 +272,7 @@ flowchart LR
     M --> N{更多品牌?}
     N -- 是 --> F
     N -- 否 --> O[(標記完工)] --> P[完美結束]
+```
 
 ---
 
@@ -297,10 +298,15 @@ erDiagram
         TEXT last_scraped
     }
     
+    system_metadata {
+        TEXT key PK
+        TEXT value
+    }
+    
     car_catalog ||--o{ model_progress : "has progress"
 ```
 
-### 中文翻譯對照表 
+### 中文翻譯對照表 
 
 #### 車型 (Category)
 
