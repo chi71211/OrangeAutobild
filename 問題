@@ -1,10 +1,20 @@
-PS C:\Users\simon.su\AppData\Local\Programs\Microsoft VS Code> & C:\Users\simon.su\AppData\Roaming\uv\python\cpython-3.14.6-windows-x86_64-none\python.exe "d:/NUCT/2026-陳子齊 TPMS 網路資料爬蟲與數據庫建檔/RDSK.py"
-📦 偵測到缺少必要套件，準備自動安裝: requests, pandas, openpyxl, urllib3, tqdm
-error: externally-managed-environment
+@echo off
+chcp 65001 >nul
+title RDKS 自動更新排程器
 
-× This environment is externally managed
-╰─> This Python installation is managed by uv and should not be modified.
+:: 切換到此批次檔所在的目錄 (請確保此檔與 Python 腳本放在同一個資料夾)
+cd /d "%~dp0"
 
-note: If you believe this is a mistake, please contact your Python installation or OS distribution provider. You can override this, at the risk of breaking your Python installation or OS, by passing --break-system-packages.
-hint: See PEP 668 for the detailed specification.
-❌ 自動安裝套件失敗: Command '['C:\\Users\\simon.su\\AppData\\Roaming\\uv\\python\\cpython-3.14.6-windows-x86_64-none\\python.exe', '-m', 'pip', 'install', 'requests', 'pandas', 'openpyxl', 'urllib3', 'tqdm']' returned non-zero exit status 1.
+:: 檢查 Python 是否已安裝
+python --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [錯誤] 找不到 Python！請確認您的電腦已經安裝 Python。
+    pause
+    exit /b
+)
+
+:: 啟動 Python 腳本 (Python 腳本內會自己判斷這個月是否需要抓取)
+python 胎壓檢測器_開機自動版.py
+
+exit /b
+```eof
