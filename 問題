@@ -1,13 +1,10 @@
-   [1/21] 汽油 - Leon 2.0 TSI OPF DSG, Cup...
-      [2/21] 汽油 - Leon 2.0 TSI OPF DSG, Cup...
-      [3/21] 汽油 - Leon 2.0 TSI OPF DSG, Cup...
-      [4/21] 汽油 - Leon 2.0 TSI OPF DSG, Cup...
-[Timeout] Stopping extraction...
+PS C:\Users\simon.su\AppData\Local\Programs\Microsoft VS Code> & C:\Users\simon.su\AppData\Roaming\uv\python\cpython-3.14.6-windows-x86_64-none\python.exe "d:/NUCT/2026-陳子齊 TPMS 網路資料爬蟲與數據庫建檔/RDSK.py"
+📦 偵測到缺少必要套件，準備自動安裝: requests, pandas, openpyxl, urllib3, tqdm
+error: externally-managed-environment
 
+× This environment is externally managed
+╰─> This Python installation is managed by uv and should not be modified.
 
-   [Export] SEAT done (364 records) [18/99 brands] [330.0 min]
-
-[Complete] Scraper finished! Time: 330.0 minutes
-[Database] autobild_master.db
-[CSV Dir]  AutoBild_Exports/
-Error: The action 'Run scraper' has timed out after 330 minutes.
+note: If you believe this is a mistake, please contact your Python installation or OS distribution provider. You can override this, at the risk of breaking your Python installation or OS, by passing --break-system-packages.
+hint: See PEP 668 for the detailed specification.
+❌ 自動安裝套件失敗: Command '['C:\\Users\\simon.su\\AppData\\Roaming\\uv\\python\\cpython-3.14.6-windows-x86_64-none\\python.exe', '-m', 'pip', 'install', 'requests', 'pandas', 'openpyxl', 'urllib3', 'tqdm']' returned non-zero exit status 1.
