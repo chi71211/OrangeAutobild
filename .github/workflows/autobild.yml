@@ -49,7 +49,7 @@ jobs:
     permissions:
       contents: write 
 
-    timeout-minutes: 360  # 6 小時
+    timeout-minutes: 350  # 5.8 小時
 
     steps:
     # 步驟 1：下載程式碼與上次存檔的資料庫 ( Checkout 會一併把 Repo 裡的 .db 載下來)
@@ -87,7 +87,7 @@ jobs:
           echo "Normal mode (7-day check)"
           python autobild_github.py $BRAND_ARG
         fi
-      timeout-minutes: 345  # 5.5 小時
+      timeout-minutes: 345  # 5.7 小時
 
     # 🌟 步驟 5：將進度 Commit 並 Push 回 GitHub 儲存庫 (取代原本的下載 Artifact)
     - name: Commit and Push progress
