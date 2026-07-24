@@ -1,76 +1,297 @@
-```mermaid
-flowchart LR
- %% Partslink24 TPMS 爬蟲流程圖 — 簡報專用配色
-    classDef phase_init fill:#FADBD8,stroke:#C0392B,stroke-width:2px,color:#641E16,font-weight:bold
-    classDef phase_nav fill:#D6EAF8,stroke:#2980B9,stroke-width:2px,color:#154360,font-weight:bold
-    classDef phase_parse fill:#D5F5E3,stroke:#27AE60,stroke-width:2px,color:#145A32,font-weight:bold
-    classDef phase_save fill:#FCF3CF,stroke:#F39C12,stroke-width:2px,color:#7D3C98,font-weight:bold
-    classDef phase_verify fill:#E8DAEF,stroke:#8E44AD,stroke-width:2px,color:#4A235A,font-weight:bold
-    classDef decision fill:#FFFFFF,stroke:#7F8C8D,stroke-width:2px,stroke-dasharray:5 5
+[技術架構報告_詳細版.md](https://github.com/user-attachments/files/30336437/_.md)
+# Partslink24 TPMS 爬蟲技術架構報告
 
-    subgraph Phase1 ["① 啟動與登入"]
-        direction TB
-        A([系統啟動]) --> B["啟動無頭 Chromium<br> playwright install chromium"]:::phase_init
-        B --> C["移除 #usercentrics-root<br>突破 Cookie 同意彈窗<br>(反覆執行 3 次)"]:::phase_init
-        C --> D["填入 Company ID / 帳號密碼<br>點擊 hidden-login"]:::phase_init
-        D --> E{"等待 15 秒<br>是否需要 Squeezeout?"}:::decision
-        E -- "是" --> F["點擊 squeezeout-login-btn"]:::phase_init
-        E -- "否" --> G([進入目錄頁面])
-        F --> G
-    end
+---
 
-    subgraph Phase2 ["② 品牌導覽 — 雙軌模式"]
-        direction TB
-        G --> H{"品牌類型?"}:::decision
-        H -- "BMW / MINI" --> I["BMW 式導覽<br>modelTable (x≈60)<br>modelTypeTable (x≈334)<br>引擎 (x>500)<br>ECE (x>600)"]:::phase_nav
-        H -- "Audi / VW / Porsche<br>SEAT / Skoda / Cupra" --> J["VAG 式導覽<br>modelFamiliesTable → row click<br>modelYearTable<br>restrictionTable1/2/3"]:::phase_nav
-        H -- "Mercedes / Volvo<br>Toyota / 日系車" --> K["通用式導覽<br>動態偵測可用表格<br>自動選擇最新年份"]:::phase_nav
-    end
+## Partslink24 爬蟲運作架構（React SPA 動態渲染 + 雙軌導覽引擎）
 
-    subgraph Phase3 ["③ 智慧搜尋與解析"]
-        direction TB
-        I --> L["輸入搜尋關鍵字<br>BMW: 433MHz / RDC<br>VAG: Sensor für Reifendruck<br>日系: TPMS / Tire Pressure"]:::phase_parse
-        J --> L
-        K --> L
-        L --> M["等待 12 秒載入<br>攔截動態渲染結果"]:::phase_parse
-        M --> N{"搜尋結果?"}:::decision
-        N -- "keine Einträge" --> O["嘗試備選關鍵字<br>或切換車款"]:::phase_parse
-        N -- "有結果" --> P["正則提取零件號碼<br>BMW: XX XX X XXX XXX<br>VAG: XXX XXX XXX X"]:::phase_parse
-        O --> L
-    end
+### 智能環境自適應與隱藏元素突破
 
-    subgraph Phase4 ["④ 智慧過濾與去重"]
-        direction TB
-        P --> Q{"是否為 TPMS?"}:::decision
-        Q -- "包含 Reifendruck / RDC<br>排除 Steuergerät" --> R["寫入 SQLite 資料庫<br>UNIQUE 約束自動去重"]:::phase_save
-        Q -- "不符條件" --> S["跳過此零件"]:::phase_parse
-    end
+**程式碼體現：**
 
-    subgraph Phase5 ["⑥ 驗證與匯出"]
-        direction TB
-        R --> T{"所有品牌完成?"}:::decision
-        T -- "否" --> U["切換下一個品牌<br>重新導覽"]:::phase_nav
-        T -- "是" --> V["點擊零件詳情頁<br>截圖存證"]:::phase_verify
-        V --> W["匯出 CSV 報表<br>品牌 / 零件號碼 / 描述"]:::phase_save
-        W --> X([安全退出])
-    end
+我們發現 Partslink24 使用 `#usercentrics-root` 影子 DOM（Shadow DOM）作為 Cookie 同意彈窗，這個元素以 `pointer-events: auto` 覆蓋全頁面，**阻擋所有滑鼠事件**。與傳統的 `<div class="modal">` 不同，Shadow DOM 無法用常規 CSS 選擇器穿透。
 
-    subgraph Phase4b ["⑤ 防護與斷點續爬"]
-        direction TB
-        R --> Y{"遭遇異常?"}:::decision
-        Y -- "EPIPE / 超時" --> Z["重新啟動 Chromium<br>記錄失敗車款"]:::phase_init
-        Y -- "Ctrl+C / 手動中斷" --> AA["緊急安全存檔<br>記錄進度至 DB"]:::phase_save
-        Y -- "正常" --> AB["隨機等待 5-10 秒<br>避免觸發反爬"]:::phase_save
-        Z --> G
-        AA --> AC([下次啟動時<br>接續未完成品牌])
-    end
+我們設計了 `uc()` 函數，透過 `page.evaluate()` 直接執行 JavaScript 從 DOM 樹中**暴力移除**該元素：
 
-    %% 跨區塊連結
-    G --> Phase2
-    Phase2 --> Phase3
-    Phase3 --> Phase4
-    Phase4 --> Phase4b
-    Phase4 --> Phase5
-    Phase4b --> Phase5
-    U --> Phase2
+```python
+async def uc(self):
+    await self.page.evaluate(
+        '() => { const u = document.querySelector("#usercentrics-root"); if (u) u.remove(); }')
 ```
+
+關鍵在於**反覆執行 3 次**——因為 Usercentrics 會在移除後重新渲染，單次移除無效。我們在每個關鍵操作（登入、導覽、搜尋）的前後都呼叫 `uc()`，形成「包夾式清除」，確保互動元素永遠不被遮擋。這比嘗試去點擊「全部接受」按鈕更穩定，因為彈窗的 iframe 結構會隨 A/B 測試而變化。
+
+---
+
+### CSS 模組選擇器的精準穿透
+
+**程式碼體現：**
+
+Partslink24 是一個 **React SPA**（單頁應用），使用 CSS Modules 產生隨機化的 class 名稱，例如 `class="_selectable_abc123"`。我們無法用固定的 class 名稱選取元素。
+
+我們發現了其命名規律：所有可點擊的選項都包含 `_selectable_` 這個子字串。因此設計了全域選擇器常數：
+
+```python
+SEL = '[class*="_selectable_"]'
+```
+
+配合 `getBoundingClientRect()` 做**空間定位**——不同欄位的選項分布在不同的 X 座標範圍：
+
+| 欄位 | X 座標範圍 | 用途 |
+|------|-----------|------|
+| 車系/車款 | x < 200 | 左側導覽列 |
+| 車型/年份 | 200 ≤ x < 500 | 中間選擇區 |
+| 引擎/規格 | 500 ≤ x < 600 | 右側規格區 |
+| 地區認證 | x ≥ 600 | 最右側 ECE 選擇 |
+
+我們封裝了 `click_sel(text, x_min)` 和 `click_first_right(x_min)` 兩個方法，讓爬蟲能精準地在正確的欄位中點擊正確的元素，不會誤觸其他欄位。
+
+---
+
+### 雙軌導覽引擎：BMW 式 vs VAG 式
+
+**程式碼體現：**
+
+這是本爬蟲最核心的架構創新。我們在逆向工程中發現，Partslink24 對不同品牌使用了**兩套完全不同的 DOM 導覽結構**：
+
+**BMW 式導覽**（BMW、MINI）——多欄表格空間佈局：
+```
+modelTable (x≈60) → modelTypeTable (x≈334) → 引擎 (x>500) → ECE (x>600)
+```
+每一層都是平行的 `[class*="_selectable_"]` 元素，靠 X 座標區分欄位。
+
+**VAG 式導覽**（Audi/VW/Porsche/SEAT/Skoda/Cupra）——層級行點擊：
+```
+modelFamiliesTable → [data-test-id="row"] click
+  → modelYearTable → restrictionTable1 → restrictionTable2 → restrictionTable3
+```
+每一層都是 `data-test-id="row"` 的行元素，點擊後才會渲染下一層的表格。
+
+我們在 `Config.BRANDS` 中為每個品牌標記 `'nav': 'bmw'` 或 `'nav': 'vag'`，在主迴圈中根據此標記呼叫對應的 `scrape_bmw()` 或 `scrape_vag()` 方法。這讓同一套爬蟲能適配兩套完全不同的網站結構。
+
+```python
+BRANDS = {
+    'bmw':    { 'nav': 'bmw', 'search': '433MHz', ... },
+    'audi':   { 'nav': 'vag', 'search': 'Sensor für Reifendruck', ... },
+    'vw':     { 'nav': 'vag', 'search': 'Sensor für Reifendruck', ... },
+    'porsche':{ 'nav': 'vag', 'search': 'Sensor für Reifendruck', ... },
+}
+```
+
+---
+
+### 智慧車型選擇：過濾 M 系列與老車
+
+**程式碼體現：**
+
+Partslink24 的車型列表按**字母順序**排列，不按年代排列。導致：
+- `models[0]` 總是選到 `E21`（1975 年的 3 系列）
+- `models[-1]` 總是選到 `M5`（高性能版本）
+
+我們設計了**優先級掃描邏輯**：
+
+```python
+# 第一輪：找 G/F/U 開頭的現代非 M 車型
+for m in models:
+    code = m.split('(')[0].strip().upper()
+    is_m = 'M3' in code or 'M4' in code or 'M5' in code
+    if not is_m and any(p in code for p in ['G2','G3','F2','F3','F4','F5','F6','F7','U1','U2']):
+        model = m; break
+
+# 第二輪：如果第一輪沒找到，取第一個非 M 的
+if model == models[0]:
+    for m in models:
+        code = m.split('(')[0].strip().upper()
+        if 'M3' not in code and 'M4' not in code and 'M5' not in code:
+            model = m; break
+```
+
+這確保爬蟲永遠選到**有代表性的量產車型**，而非特種用途的 M 系列或停產的老車。
+
+---
+
+### 精準搜尋關鍵字策略
+
+**程式碼體現：**
+
+不同品牌在 Partslink24 中使用不同的零件命名系統，我們為每個品牌集團設計了專屬的搜尋策略：
+
+| 品牌集團 | 搜尋關鍵字 | 匹配邏輯 |
+|---------|-----------|---------|
+| BMW / MINI | `433MHz` | 直接搜尋頻率，精準命中 RDC 感測器 |
+| Audi / VW / SEAT / Skoda / Cupra | `Sensor für Reifendruck` | 德文「胎壓感測器」 |
+| Porsche | `Sensor für Reifendruck` | 同 VAG |
+| Mercedes / Toyota / Volvo | `TPMS` / `Reifendruck` / `Tire Pressure` | 多關鍵字嘗試 |
+
+BMW 使用 `433MHz` 而非 `Sensor für Reifendruck` 的原因是：BMW 的 TPMS 感測器在目錄中命名為 `Radelektronikmodul RDC 433MHZ`，不含 `Sensor` 一詞。用頻率搜尋反而更精準。
+
+我們還在 `filter_tpms()` 函數中加入了**智慧過濾**，排除控制單元和支架：
+
+```python
+def filter_tpms(self, parts):
+    return [(p, d) for p, d in parts
+            if any(kw in d.upper() for kw in ['REIFENDRUCK', 'TPMS', 'RDC', 'RDK', '433', '315'])
+            or '907 255' in p or '907 275' in p ...]
+```
+
+---
+
+### 正則表達式雙格式解析器
+
+**程式碼體現：**
+
+BMW 和 VAG 的零件號碼格式完全不同，我們設計了兩套獨立的正則解析器：
+
+```python
+# BMW: XX XX X XXX XXX（數字為主）
+pns = re.findall(r'\b(\d{2}\s\d{2}\s\d\s\d{3}\s\d{3})\b', clean)
+# 例：36 10 6 856 227
+
+# VAG: XXX XXX XXX X（字母+數字混合）
+pns = re.findall(r'\b([0-9A-Z]{2,4}\s[0-9A-Z]{3}\s[0-9A-Z]{3}(?:\s[0-9A-Z]{1,2})?)\b', clean)
+# 例：5Q0 907 275 G, 95C 907 255, PAD 907 255 A
+```
+
+`extract_bmw()` 和 `extract_vag()` 各自處理對應的格式，並從零件號碼後方 200 字元的上下文中提取描述文字，確保描述與零件號碼正確對應。
+
+---
+
+### 防封鎖退避策略與反偵測
+
+**程式碼體現：**
+
+Partslink24 使用 Cloudflare 護盾，我們配置了多層防偵測機制：
+
+```python
+browser = await p.chromium.launch(headless=True, args=[
+    '--disable-blink-features=AutomationControlled',  # 隱藏自動化特徵
+    '--no-sandbox'])
+ctx = await browser.new_context(
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    viewport={'width': 1920, 'height': 1080}, locale='de-DE')
+```
+
+加上在每個頁面載入後加入反偵測腳本：
+
+```python
+await self.page.add_init_script(
+    "Object.defineProperty(navigator, 'webdriver', { get: () => undefined })")
+```
+
+在搜尋之間加入**隨機延遲**：
+
+```python
+await asyncio.sleep(random.uniform(5, 10))
+```
+
+以及每次搜尋後固定等待 **12 秒**（`search_part` 中的 `await asyncio.sleep(12)`），模擬真人思考時間。`uc()` 函數的反覆執行也間接拉長了操作間隔，進一步降低被偵測的風險。
+
+---
+
+### SQLite UPSERT 與去重機制
+
+**程式碼體現：**
+
+我們使用 SQLite 的 `INSERT OR REPLACE` 語句，依賴 `UNIQUE` 約束實現無損覆寫：
+
+```sql
+CREATE TABLE IF NOT EXISTS sensors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    Brand TEXT, Series TEXT, Model TEXT, Engine TEXT,
+    Teilenummer TEXT, Description TEXT, SearchTerm TEXT,
+    scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(Brand, Series, Model, Engine, Teilenummer)
+)
+```
+
+```python
+def add(self, brand, series, model, engine, pn, desc, term):
+    self.conn.execute(
+        'INSERT OR REPLACE INTO sensors (Brand,Series,Model,Engine,Teilenummer,Description,SearchTerm) '
+        'VALUES (?,?,?,?,?,?,?)',
+        (brand, series, model, engine, pn, desc, term))
+    self.conn.commit()
+```
+
+同一品牌+車系+車型+引擎+零件號碼的組合不會重複寫入。多次爬取時，舊記錄會被自動替換，實現「去重與無痕更新」。匯出時再用 `GROUP BY Brand, Teilenummer` 產生去重的零件清單。
+
+---
+
+### 緊急安全存檔與斷點記憶
+
+**程式碼體現：**
+
+我們在爬蟲主迴圈中設計了**雙重防護**：
+
+```python
+try:
+    await self.login()
+    for key in keys:
+        if self.timeout(): break  # 時間限制防護
+        cfg = Config.BRANDS[key]
+        if cfg['nav'] == 'bmw':
+            await self.scrape_bmw(key)
+        else:
+            await self.scrape_vag(key)
+except KeyboardInterrupt:
+    print("\n[Interrupt]", flush=True)
+except Exception as e:
+    print(f"\n[Error] {e}", flush=True)
+finally:
+    self.db.export()  # 無論如何都會匯出 CSV
+    await browser.close()
+```
+
+`finally` 區塊確保**即使 Ctrl+C 中斷或發生異常**，都會執行 `export()` 匯出已收集的資料。每個品牌完成後資料即時 `commit()` 到 SQLite，不會因為中途崩潰而丢失已完成的部分。
+
+`timeout()` 方法則限制最大執行時間（預設 4 小時），避免長時間運行導致 IP 被封鎖：
+
+```python
+def timeout(self):
+    return (time.time() - self.start) / 3600 >= Config.MAX_RUNTIME_HOURS
+```
+
+---
+
+## 與 Interpneu / AutoBild 爬蟲的技術對比
+
+| 技術維度 | Interpneu（靜態+API） | AutoBild（動態渲染） | Partslink24（本專案） |
+|---------|---------------------|--------------------|--------------------|
+| 爬取方式 | requests + API 攔截 | Playwright 動態渲染 | Playwright + DOM 空間定位 |
+| 資料來源 | JSON API 端點 | HTML + API 混合 | React SPA DOM 直接操作 |
+| 反偵測 | Retry + 429 處理 | dismiss_cookie | uc() 影子 DOM 移除 + 反偵測腳本 |
+| 導覽結構 | API URL 拼接 | 按鈕點擊 + 捲動 | 雙軌導覽引擎（BMW式/VAG式） |
+| 資料儲存 | SQLite + SQL View | SQLite | SQLite + CSV 匯出 |
+| 斷點續爬 | 7 日週期循環 | 無 | 時間限制 + finally 安全存檔 |
+| 選擇器策略 | 無（直接 API） | CSS 選擇器 | CSS Modules 選擇器 + X 座標空間定位 |
+
+---
+
+## Partslink24 爬蟲技術難點總結
+
+### 1. React SPA 的動態渲染
+Partslink24 是一個完整的 React 單頁應用，所有內容都透過 JavaScript 動態渲染。無法用 requests + BeautifulSoup 這種靜態爬取方式，必須使用瀏覽器自動化。
+
+### 2. Shadow DOM 彈窗
+Usercentrics 使用 Shadow DOM 封裝 Cookie 同意彈窗，常規的 `document.querySelector()` 無法穿透。必須用 JavaScript 直接操作 DOM 樹移除元素。
+
+### 3. CSS Modules 動態類名
+所有元素的 class 名稱都包含隨機字串（如 `_selectable_abc123`），無法用固定選擇器。必須用 `[class*="_selectable_"]` 這種模糊匹配。
+
+### 4. 空間定位而非語意定位
+不同欄位的選項沒有 `data-` 屬性或唯一的 class 區分，只能靠 `getBoundingClientRect()` 的 X 座標來判斷它屬於哪個欄位。
+
+### 5. 雙軌導覽結構
+同一個網站對不同品牌使用完全不同的 DOM 結構，必須設計兩套獨立的導覽邏輯。
+
+### 6. 零件號碼格式不統一
+BMW 用純數字格式（`36 10 6 856 227`），VAG 用字母數字混合格式（`5Q0 907 275 G`），Porsche 用 `PAD/PAB` 前綴格式，需要多套正則表達式。
+
+### 7. 間接式 vs 直接式 TPMS
+部分車款（如 VW Golf、Polo）使用間接式 TPMS（靠 ABS 感測器），在目錄中沒有獨立的感測器零件。爬蟲必須能辨識這種情況，避免誤報「找不到資料」。
+
+---
+
+*報告日期：2026 年 7 月 24 日*
+*爬蟲版本：v3.0*
+*技術架構：Playwright + SQLite + 雙軌導覽引擎*
