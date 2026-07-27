@@ -14,7 +14,7 @@ on:
   push:
     branches: [ autobild_github.py ]
 
-  # 2. 手動觸發
+# 2. 手動觸發
   workflow_dispatch:
     inputs:
       target_brand:
@@ -52,9 +52,11 @@ jobs:
     timeout-minutes: 350  # 5.8 小時
 
     steps:
-    # 步驟 1：下載程式碼與上次存檔的資料庫 ( Checkout 會一併把 Repo 裡的 .db 載下來)
+    # 步驟 1：下載程式碼與上次存檔的資料庫
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # 確保抓取完整歷史紀錄，避免 Git 同步問題
 
     # 步驟 2：設定 Python 環境
     - name: Set up Python
@@ -89,7 +91,15 @@ jobs:
         fi
       timeout-minutes: 345  # 5.7 小時
 
-    # 🌟 步驟 5：將進度 Commit 並 Push 回 GitHub 儲存庫 (取代原本的下載 Artifact)
+    # 🌟 步驟 5：同步遠端最新進度 (✅ 解決 5 小時時間差衝突的關鍵)
+    - name: Pull latest changes from remote
+      if: always()
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git pull origin main --rebase
+
+    # 🌟 步驟 6：將進度 Commit 並 Push 回 GitHub 儲存庫
     - name: Commit and Push progress
       if: always() # 終極防護：無論成功、失敗還是被 Cancel，都強制執行
       uses: stefanzweifel/git-auto-commit-action@v5
@@ -97,7 +107,7 @@ jobs:
         commit_message: "Auto-save database and CSV progress (Run ${{ github.run_number }})"
         file_pattern: "*.db AutoBild_Exports/*.csv"
 
-    # 步驟 6：依然保留 CSV Artifact 上傳，方便您在網頁上直接打包下載
+    # 步驟 7：依然保留 CSV Artifact 上傳，方便您在網頁上直接打包下載
     - name: Upload CSV files
       uses: actions/upload-artifact@v4
       if: always()
