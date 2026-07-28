@@ -10,11 +10,11 @@ name: AutoBild Scraper
 # 觸發條件設定
 # ============================================================
 on:
-  # 1. 推送程式碼時觸發 (修正：應填寫分支名稱，例如 main 或 master)
+  # 1. 推送程式碼時觸發 (✅ 已修正為 main 分支)
   push:
-    branches: [ autobild_github.py ]
+    branches: [ main ]
 
-# 2. 手動觸發
+  # 2. 手動觸發
   workflow_dispatch:
     inputs:
       target_brand:
@@ -30,17 +30,19 @@ on:
           - Audi
           - Porsche
       force_full_scan:
-        description: '強制全面掃描（忽略7天檢查）'
+        description: '強制全面掃描（忽略進度檢查）'
         required: false
         default: 'false'
         type: choice
         options:
           - 'false'
           - 'true'
-# 🌟 3. 新增：排程自動觸發 (Cron 語法)
+
+  # 🌟 3. 排程自動觸發 (✅ 改為每 3 天執行一次)
   schedule:
-    # 這裡設定為：每個月的 1 號，UTC 時間 00:00 (台灣時間早上 08:00) 自動執行
-    - cron: '0 0 1 * *'
+    # 這裡設定為：每隔 3 天的 UTC 時間 00:00 (台灣時間早上 08:00) 自動執行
+    - cron: '0 0 */3 * *'
+
 # ============================================================
 # 工作任務設定
 # ============================================================
@@ -89,18 +91,26 @@ jobs:
           echo "Force full scan mode"
           python autobild_github.py $BRAND_ARG --reset
         else
-          echo "Normal mode (7-day check)"
+          echo "Normal mode (Python handles the progress cycle check)"
           python autobild_github.py $BRAND_ARG
         fi
       timeout-minutes: 345  # 5.7 小時
 
-    # 🌟 步驟 5：同步遠端最新進度 (✅ 解決 5 小時時間差衝突的關鍵)
+    # 🌟 步驟 5：同步遠端最新進度 (✅ 加入 stash 保險箱機制，解決 unstaged changes 錯誤)
     - name: Pull latest changes from remote
       if: always()
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        
+        # 1. 把剛爬下來的 .db 與 .csv 放進暫存保險箱
+        git stash
+        
+        # 2. 安全地拉取遠端最新進度 (此時工作區是乾淨的，不會報錯)
         git pull origin main --rebase
+        
+        # 3. 把保險箱裡的檔案拿出來，準備給下一步的 Commit 使用
+        git stash pop || true
 
     # 🌟 步驟 6：將進度 Commit 並 Push 回 GitHub 儲存庫
     - name: Commit and Push progress
